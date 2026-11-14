@@ -333,13 +333,12 @@ $(document).ready(function() {
 
 /* ==========================================
    4. INTEGRAÇÃO COM GOOGLE PLANILHAS
-   Registro automático das personalizações
+   Registro das tentativas de envio
 ========================================== */
 
 $(window).on('load', function() {
 
-    // Executa somente na página do carrinho,
-    // sem executar durante o checkout
+    // Executa somente na página do carrinho
     if (
         !$('body').hasClass('pagina-carrinho') ||
         $('body').hasClass('carrinho-checkout')
@@ -347,52 +346,65 @@ $(window).on('load', function() {
         return;
     }
 
-    // Configurações demonstrativas
+    // Configurações fictícias para o portfólio
     var URL_PLANILHA = 'URL_DO_GOOGLE_APPS_SCRIPT';
-    var TOKEN = 'SEU_TOKEN_DE_EXEMPLO';
+    var TOKEN = 'TOKEN_DE_EXEMPLO_NAO_UTILIZAR_EM_PRODUCAO';
 
     if (URL_PLANILHA.indexOf('http') !== 0) return;
 
+    // Recupera os dados de personalização
     var dados;
 
     try {
         dados = JSON.parse(
             localStorage.getItem('objectCustom')
         );
-    } catch(e) {
+    } catch (erro) {
+        console.error('Não foi possível ler as personalizações.');
         return;
     }
 
-    if (!dados || !dados.length) return;
+    if (!Array.isArray(dados) || !dados.length) return;
 
-    // Recupera os registros já enviados
-    var enviados;
+    // Recupera as tentativas anteriores
+    var tentativas;
 
     try {
-        enviados = JSON.parse(
-            localStorage.getItem('objectCustomEnviados')
+        tentativas = JSON.parse(
+            localStorage.getItem('objectCustomTentativas')
         ) || [];
-    } catch(e) {
-        enviados = [];
+    } catch (erro) {
+        tentativas = [];
+    }
+
+    if (!Array.isArray(tentativas)) {
+        tentativas = [];
     }
 
     var textoPagina = $('body').text();
 
     dados.forEach(function(item) {
 
+        // Valida a estrutura do registro
         if (
             !item ||
             !item.sku ||
-            textoPagina.indexOf(item.sku) === -1
+            !item.dadosInputs ||
+            typeof item.dadosInputs !== 'object'
         ) {
             return;
         }
 
-        // Identificador para evitar reenvios
-        var chave =
-            item.sku + '|' + JSON.stringify(item.dadosInputs);
+        // Confere se o produto está no carrinho
+        if (textoPagina.indexOf(item.sku) === -1) {
+            return;
+        }
 
-        if (enviados.indexOf(chave) !== -1) return;
+        // Identificador para evitar tentativas repetidas
+        var chave = item.sku + '|' +
+            JSON.stringify(item.dadosInputs);
+
+        if (tentativas.indexOf(chave) !== -1) return;
 
         var foto = '';
         var detalhes = [];
@@ -400,17 +412,34 @@ $(window).on('load', function() {
         // Organiza os dados de personalização
         for (var campo in item.dadosInputs) {
 
-            if (campo === 'Foto para gravação') {
-                foto = item.dadosInputs[campo];
-            } else {
-                detalhes.push(
-                    campo + ': ' + item.dadosInputs[campo]
-                );
-            }
+            if (
+                Object.prototype.hasOwnProperty.call(
+                    item.dadosInputs,
+                    campo
+                )
+            ) {
 
+                if (campo === 'Foto para gravação') {
+                    foto = item.dadosInputs[campo];
+                } else {
+                    detalhes.push(
+                        campo + ': ' + item.dadosInputs[campo]
+                    );
+                }
+
+            }
         }
 
-        // Envia as informações para o Google Apps Script
+        // Prepara os dados enviados à integração
+        var payload = {
+            token: TOKEN,
+            produto: String(item.name || ''),
+            sku: String(item.sku),
+            detalhes: detalhes.join(' | '),
+            foto: String(foto || '')
+        };
+
+        // Envia os dados ao Google Apps Script
         fetch(URL_PLANILHA, {
 
             method: 'POST',
@@ -421,30 +450,46 @@ $(window).on('load', function() {
                 'Content-Type': 'text/plain;charset=utf-8'
             },
 
-            body: JSON.stringify({
-
-                token: TOKEN,
-                produto: item.name,
-                sku: item.sku,
-                detalhes: detalhes.join(' | '),
-                foto: foto
-
-            })
+            body: JSON.stringify(payload)
 
         })
         .then(function() {
 
-            enviados.push(chave);
+            /*
+             * IMPORTANTE:
+             * Com no-cors, o navegador não consegue
+             * confirmar se a planilha recebeu os dados.
+             * Este registro indica apenas que a tentativa
+             * foi concluída sem erro de rede detectável.
+             */
 
-            localStorage.setItem(
-                'objectCustomEnviados',
-                JSON.stringify(enviados)
-            );
+            tentativas.push(chave);
+
+            try {
+                localStorage.setItem(
+                    'objectCustomTentativas',
+                    JSON.stringify(tentativas)
+                );
+            } catch (erro) {
+                console.error(
+                    'Não foi possível registrar a tentativa.',
+                    erro
+                );
+            }
 
         })
-        .catch(function() {});
+        .catch(function(erro) {
+
+            // Registra falhas detectáveis no navegador
+            console.error(
+                'Falha na tentativa de envio:',
+                erro
+            );
+
+        });
 
     });
 
 });
+
 </script>
