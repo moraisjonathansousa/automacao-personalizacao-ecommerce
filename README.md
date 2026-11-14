@@ -51,4 +51,32 @@ As decisões sobre a implementação, os testes e a validação do funcionamento
 
 A experiência proporcionou conhecimentos práticos em desenvolvimento web, integração de serviços, automação de processos, manipulação de dados e resolução de problemas em um ambiente real.
 
+## Demonstração das funcionalidades
+
+A solução foi desenvolvida para atender diferentes necessidades de personalização dos produtos, permitindo que o cliente informe os dados diretamente na página de compra.
+
+### 1. Personalização de alianças
+
+Seleção independente dos tamanhos de cada aliança no mesmo pedido.
+
+![Personalização de alianças](docs/images/personalizacao-aliancas.png)
+
+### 2. Gravação de nomes em peças
+
+Campo para informar o nome que será utilizado na gravação do produto.
+
+![Gravação de nomes](docs/images/gravacao-nomes.png)
+
+### 3. Colar personalizado
+
+Personalização do colar com inserção do nome e escolha da fonte.
+
+![Colar personalizado](docs/images/colar-personalizado.png)
+
+### 4. Personalização com fotografia
+
+Upload de fotografias diretamente na página do produto, com integração ao Cloudinary.
+
+![Upload de fotografia](docs/images/upload-fotografia.png)
+
 Mais do que implementar funcionalidades, o projeto demonstrou como a tecnologia pode ser aplicada para solucionar necessidades operacionais de um negócio.
