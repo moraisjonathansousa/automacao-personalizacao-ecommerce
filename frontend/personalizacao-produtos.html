@@ -1,12 +1,12 @@
 
 <!--
   PROJETO: Automação de Personalização para E-commerce
-  DESCRIÇÃO: Campos de personalização, upload de imagens
+  DESCRIÇÃO: Campos personalizados, upload de fotografias
   e integração com Google Planilhas.
 
   ATENÇÃO:
-  Os valores de configuração abaixo são demonstrativos.
-  Substitua-os somente em um ambiente autorizado.
+  Configurações demonstrativas para documentação.
+  Não utilizar em produção sem configurar os serviços.
 -->
 
 <style>
@@ -83,17 +83,17 @@
 </style>
 
 <!-- Dependência externa da plataforma -->
-<!-- Substitua pelo endereço autorizado da biblioteca utilizada -->
 <script src="URL_DA_BIBLIOTECA_DE_PERSONALIZACAO.js"></script>
 
 <script>
+
 /* ==========================================
    1. CONFIGURAÇÃO DOS CAMPOS PERSONALIZADOS
 ========================================== */
 
 variacoesPersonalizadas({
 
-    // Permite selecionar dois tamanhos de alianças
+    // Dois tamanhos para pares de alianças
     CampoDuploTamanhoGravacao: [
         {
             Produto: 'par de alianças',
@@ -123,6 +123,7 @@ variacoesPersonalizadas({
     ],
 
     CampoUnitarioTamanhoGravacao: []
+
 });
 
 
@@ -137,8 +138,7 @@ $(document).ready(function() {
         .text()
         .toLowerCase();
 
-    // Remove somente os campos de gravação
-    // quando o produto é um par de alianças
+    // Remove os campos de gravação para alianças
     if (titulo.indexOf('par de alianças') !== -1) {
         $('.atributos-personalizados .attr-gravacao').remove();
     }
@@ -157,6 +157,12 @@ $(document).ready(function() {
     var CLOUD_NAME = 'SEU_CLOUD_NAME';
     var UPLOAD_PRESET = 'SEU_UPLOAD_PRESET';
     var TAMANHO_MAX_MB = 10;
+
+    var TIPOS_PERMITIDOS = [
+        'image/jpeg',
+        'image/png',
+        'image/webp'
+    ];
 
     var $input = $(
         '.atributos-personalizados input[name="Foto para gravação"]'
@@ -177,10 +183,10 @@ $(document).ready(function() {
         '<path fill="#6f6fe8" d="M50 27a18 18 0 0 0-34-4A14 14 0 0 0 18 51h8V38h-6l12-13 12 13h-6v13h16a12 12 0 0 0 0-24z"/>' +
         '</svg>';
 
-    // Interface de envio e visualização da imagem
+    // Interface de upload
     var $zona = $(
         '<div class="foto-upload">' +
-            '<input type="file" accept="image/*" style="display:none">' +
+            '<input type="file" accept="image/jpeg,image/png,image/webp" style="display:none">' +
             '<div class="foto-upload-vazio">' +
                 icone +
                 '<strong>Insira a foto aqui</strong>' +
@@ -203,14 +209,40 @@ $(document).ready(function() {
     var $status = $zona.find('.foto-upload-status');
     var $erro = $zona.find('.foto-upload-erro');
 
+    var urlPreview = null;
+    var identificadorEnvio = 0;
+
     function mostrarErro(msg) {
         $erro.text(msg).show();
     }
 
+    // Libera o endereço temporário da prévia
+    function liberarPreview() {
+
+        if (urlPreview) {
+            URL.revokeObjectURL(urlPreview);
+            urlPreview = null;
+        }
+
+    }
+
+    // Limpa a fotografia atual
     function limpar() {
+
+        identificadorEnvio++;
+
+        liberarPreview();
+
         $input.val('');
+        $arquivo.val('');
+
+        $preview.find('img').attr('src', '');
         $preview.hide();
         $vazio.show();
+
+        $status.text('');
+        $erro.hide();
+
     }
 
     // Valida e envia a fotografia
@@ -220,25 +252,43 @@ $(document).ready(function() {
 
         $erro.hide();
 
-        if (!/^image\//.test(file.type)) {
-            mostrarErro('Escolha um arquivo de imagem (JPG, PNG ou WEBP).');
+        // Verifica o formato permitido
+        if (TIPOS_PERMITIDOS.indexOf(file.type) === -1) {
+
+            limpar();
+
+            mostrarErro(
+                'Escolha uma imagem JPG, PNG ou WEBP.'
+            );
+
             return;
         }
 
+        // Verifica o tamanho do arquivo
         if (file.size > TAMANHO_MAX_MB * 1024 * 1024) {
+
+            limpar();
+
             mostrarErro(
                 'A foto é muito grande. O limite é ' +
                 TAMANHO_MAX_MB + ' MB.'
             );
+
             return;
         }
 
+        // Invalida uma tentativa de upload anterior
+        var envioAtual = ++identificadorEnvio;
+
+        // Remove o endereço da fotografia anterior
         $input.val('');
 
-        $preview.find('img').attr(
-            'src',
-            URL.createObjectURL(file)
-        );
+        liberarPreview();
+
+        // Cria a prévia da nova fotografia
+        urlPreview = URL.createObjectURL(file);
+
+        $preview.find('img').attr('src', urlPreview);
 
         $status.text('Enviando foto...');
 
@@ -264,17 +314,21 @@ $(document).ready(function() {
 
             return resposta.json().then(function(json) {
 
-                if (!resposta.ok) {
-                    throw new Error('falha');
+                if (!resposta.ok || !json.secure_url) {
+                    throw new Error('Falha no upload');
                 }
 
                 return json;
+
             });
 
         })
         .then(function(json) {
 
-            // Armazena o link da imagem no campo original
+            // Ignora respostas de envios anteriores
+            if (envioAtual !== identificadorEnvio) return;
+
+            // Armazena o endereço seguro da fotografia
             $input.val(json.secure_url).trigger('input');
 
             $campo.removeClass('attr-invalid');
@@ -284,6 +338,9 @@ $(document).ready(function() {
         })
         .catch(function() {
 
+            // Não altera uma seleção mais recente
+            if (envioAtual !== identificadorEnvio) return;
+
             limpar();
 
             mostrarErro(
@@ -291,34 +348,53 @@ $(document).ready(function() {
             );
 
         });
+
     }
 
-    // Seleção de arquivo
+    // Abre o seletor de arquivos
     $vazio.on('click', function() {
         $arquivo[0].click();
     });
 
-    $zona.find('.foto-upload-trocar').on('click', function() {
+    // Permite trocar a fotografia
+    $zona.find('.foto-upload-trocar').on('click', function(e) {
+
+        e.preventDefault();
+
         $arquivo[0].click();
+
     });
 
+    // Seleção de arquivo
     $arquivo.on('change', function() {
+
         enviar(this.files[0]);
+
         $arquivo.val('');
+
     });
 
     // Suporte a arrastar e soltar
     $zona.on('dragover dragenter', function(e) {
+
         e.preventDefault();
+
         $zona.addClass('arrastando');
+
     });
 
     $zona.on('dragleave drop', function(e) {
+
         e.preventDefault();
+
         $zona.removeClass('arrastando');
+
     });
 
+    // Recebe arquivo arrastado
     $zona.on('drop', function(e) {
+
+        e.preventDefault();
 
         var arquivos = e.originalEvent.dataTransfer.files;
 
@@ -326,6 +402,11 @@ $(document).ready(function() {
             enviar(arquivos[0]);
         }
 
+    });
+
+    // Libera a prévia ao sair da página
+    $(window).on('pagehide', function() {
+        liberarPreview();
     });
 
 });
@@ -346,7 +427,7 @@ $(window).on('load', function() {
         return;
     }
 
-    // Configurações fictícias para o portfólio
+    // Configurações demonstrativas
     var URL_PLANILHA = 'URL_DO_GOOGLE_APPS_SCRIPT';
     var TOKEN = 'TOKEN_DE_EXEMPLO_NAO_UTILIZAR_EM_PRODUCAO';
 
@@ -356,12 +437,20 @@ $(window).on('load', function() {
     var dados;
 
     try {
+
         dados = JSON.parse(
             localStorage.getItem('objectCustom')
         );
+
     } catch (erro) {
-        console.error('Não foi possível ler as personalizações.');
+
+        console.error(
+            'Não foi possível ler as personalizações.',
+            erro
+        );
+
         return;
+
     }
 
     if (!Array.isArray(dados) || !dados.length) return;
@@ -370,11 +459,15 @@ $(window).on('load', function() {
     var tentativas;
 
     try {
+
         tentativas = JSON.parse(
             localStorage.getItem('objectCustomTentativas')
         ) || [];
+
     } catch (erro) {
+
         tentativas = [];
+
     }
 
     if (!Array.isArray(tentativas)) {
@@ -390,7 +483,8 @@ $(window).on('load', function() {
             !item ||
             !item.sku ||
             !item.dadosInputs ||
-            typeof item.dadosInputs !== 'object'
+            typeof item.dadosInputs !== 'object' ||
+            Array.isArray(item.dadosInputs)
         ) {
             return;
         }
@@ -420,23 +514,30 @@ $(window).on('load', function() {
             ) {
 
                 if (campo === 'Foto para gravação') {
+
                     foto = item.dadosInputs[campo];
+
                 } else {
+
                     detalhes.push(
                         campo + ': ' + item.dadosInputs[campo]
                     );
+
                 }
 
             }
+
         }
 
         // Prepara os dados enviados à integração
         var payload = {
+
             token: TOKEN,
             produto: String(item.name || ''),
             sku: String(item.sku),
             detalhes: detalhes.join(' | '),
             foto: String(foto || '')
+
         };
 
         // Envia os dados ao Google Apps Script
@@ -459,6 +560,7 @@ $(window).on('load', function() {
              * IMPORTANTE:
              * Com no-cors, o navegador não consegue
              * confirmar se a planilha recebeu os dados.
+             *
              * Este registro indica apenas que a tentativa
              * foi concluída sem erro de rede detectável.
              */
@@ -466,15 +568,19 @@ $(window).on('load', function() {
             tentativas.push(chave);
 
             try {
+
                 localStorage.setItem(
                     'objectCustomTentativas',
                     JSON.stringify(tentativas)
                 );
+
             } catch (erro) {
+
                 console.error(
                     'Não foi possível registrar a tentativa.',
                     erro
                 );
+
             }
 
         })
