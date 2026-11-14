@@ -1,0 +1,450 @@
+
+<!--
+  PROJETO: Automação de Personalização para E-commerce
+  DESCRIÇÃO: Campos de personalização, upload de imagens
+  e integração com Google Planilhas.
+
+  ATENÇÃO:
+  Os valores de configuração abaixo são demonstrativos.
+  Substitua-os somente em um ambiente autorizado.
+-->
+
+<style>
+.foto-upload {
+    border: 2px dashed #d9d9d9;
+    border-radius: 6px;
+    padding: 28px 16px;
+    text-align: center;
+    background: #fafafa;
+    transition: all .2s;
+}
+
+.foto-upload.arrastando {
+    border-color: #6f6fe8;
+    background: #f1f1ff;
+}
+
+.foto-upload-vazio {
+    cursor: pointer;
+}
+
+.foto-upload-vazio svg {
+    width: 56px;
+    height: 56px;
+    display: block;
+    margin: 0 auto 10px;
+}
+
+.foto-upload-vazio strong {
+    display: block;
+    font-size: 17px;
+    color: #222;
+}
+
+.foto-upload-vazio small {
+    display: block;
+    font-size: 14px;
+    color: #666;
+    margin-top: 4px;
+}
+
+.foto-upload-preview img {
+    max-width: 140px;
+    max-height: 140px;
+    border-radius: 6px;
+    display: block;
+    margin: 0 auto 8px;
+}
+
+.foto-upload-status {
+    display: block;
+    font-size: 14px;
+    color: #444;
+    margin-bottom: 6px;
+}
+
+.foto-upload-erro {
+    display: block;
+    font-size: 14px;
+    color: #d00;
+    margin-top: 8px;
+}
+
+.foto-upload-trocar {
+    font-size: 14px;
+    color: #6f6fe8;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.atributo-comum.attr-foto > span {
+    display: none;
+}
+</style>
+
+<!-- Dependência externa da plataforma -->
+<!-- Substitua pelo endereço autorizado da biblioteca utilizada -->
+<script src="URL_DA_BIBLIOTECA_DE_PERSONALIZACAO.js"></script>
+
+<script>
+/* ==========================================
+   1. CONFIGURAÇÃO DOS CAMPOS PERSONALIZADOS
+========================================== */
+
+variacoesPersonalizadas({
+
+    // Permite selecionar dois tamanhos de alianças
+    CampoDuploTamanhoGravacao: [
+        {
+            Produto: 'par de alianças',
+            Nome1: 'Tamanho Aliança 1',
+            Nome2: 'Tamanho Aliança 2'
+        }
+    ],
+
+    // Campos individuais de personalização
+    CampoUnitarioGravacao: [
+        {
+            Produto: 'foto gravação',
+            Gravacao1: 'Foto para gravação'
+        },
+        {
+            Produto: 'colar com nome',
+            Gravacao1: 'Qual será o nome'
+        },
+        {
+            Produto: 'nome gravado',
+            Gravacao1: 'Qual será o nome'
+        },
+        {
+            Produto: 'personalize',
+            Gravacao1: 'Personalização'
+        }
+    ],
+
+    CampoUnitarioTamanhoGravacao: []
+});
+
+
+/* ==========================================
+   2. AJUSTE DOS CAMPOS DE ALIANÇAS
+========================================== */
+
+$(document).ready(function() {
+
+    var titulo = $('h1.nome-produto')
+        .first()
+        .text()
+        .toLowerCase();
+
+    // Remove somente os campos de gravação
+    // quando o produto é um par de alianças
+    if (titulo.indexOf('par de alianças') !== -1) {
+        $('.atributos-personalizados .attr-gravacao').remove();
+    }
+
+});
+
+
+/* ==========================================
+   3. UPLOAD DE FOTOGRAFIAS
+   Integração com Cloudinary
+========================================== */
+
+$(document).ready(function() {
+
+    // Configurações demonstrativas
+    var CLOUD_NAME = 'SEU_CLOUD_NAME';
+    var UPLOAD_PRESET = 'SEU_UPLOAD_PRESET';
+    var TAMANHO_MAX_MB = 10;
+
+    var $input = $(
+        '.atributos-personalizados input[name="Foto para gravação"]'
+    );
+
+    if (!$input.length) return;
+
+    var $campo = $input
+        .closest('.atributo-comum')
+        .addClass('attr-foto');
+
+    $campo.children('ul').show();
+    $input.hide();
+
+    // Ícone da área de upload
+    var icone =
+        '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">' +
+        '<path fill="#6f6fe8" d="M50 27a18 18 0 0 0-34-4A14 14 0 0 0 18 51h8V38h-6l12-13 12 13h-6v13h16a12 12 0 0 0 0-24z"/>' +
+        '</svg>';
+
+    // Interface de envio e visualização da imagem
+    var $zona = $(
+        '<div class="foto-upload">' +
+            '<input type="file" accept="image/*" style="display:none">' +
+            '<div class="foto-upload-vazio">' +
+                icone +
+                '<strong>Insira a foto aqui</strong>' +
+                '<small>(Limite de 1 arquivo)</small>' +
+            '</div>' +
+            '<div class="foto-upload-preview" style="display:none">' +
+                '<img alt="Foto selecionada">' +
+                '<span class="foto-upload-status"></span>' +
+                '<a class="foto-upload-trocar" href="javascript:void(0)">Trocar foto</a>' +
+            '</div>' +
+            '<span class="foto-upload-erro" style="display:none"></span>' +
+        '</div>'
+    );
+
+    $input.closest('.wrap-input').append($zona);
+
+    var $arquivo = $zona.find('input[type="file"]');
+    var $vazio = $zona.find('.foto-upload-vazio');
+    var $preview = $zona.find('.foto-upload-preview');
+    var $status = $zona.find('.foto-upload-status');
+    var $erro = $zona.find('.foto-upload-erro');
+
+    function mostrarErro(msg) {
+        $erro.text(msg).show();
+    }
+
+    function limpar() {
+        $input.val('');
+        $preview.hide();
+        $vazio.show();
+    }
+
+    // Valida e envia a fotografia
+    function enviar(file) {
+
+        if (!file) return;
+
+        $erro.hide();
+
+        if (!/^image\//.test(file.type)) {
+            mostrarErro('Escolha um arquivo de imagem (JPG, PNG ou WEBP).');
+            return;
+        }
+
+        if (file.size > TAMANHO_MAX_MB * 1024 * 1024) {
+            mostrarErro(
+                'A foto é muito grande. O limite é ' +
+                TAMANHO_MAX_MB + ' MB.'
+            );
+            return;
+        }
+
+        $input.val('');
+
+        $preview.find('img').attr(
+            'src',
+            URL.createObjectURL(file)
+        );
+
+        $status.text('Enviando foto...');
+
+        $vazio.hide();
+        $preview.show();
+
+        var dados = new FormData();
+
+        dados.append('file', file);
+        dados.append('upload_preset', UPLOAD_PRESET);
+
+        // Envio da imagem para o Cloudinary
+        fetch(
+            'https://api.cloudinary.com/v1_1/' +
+            CLOUD_NAME +
+            '/image/upload',
+            {
+                method: 'POST',
+                body: dados
+            }
+        )
+        .then(function(resposta) {
+
+            return resposta.json().then(function(json) {
+
+                if (!resposta.ok) {
+                    throw new Error('falha');
+                }
+
+                return json;
+            });
+
+        })
+        .then(function(json) {
+
+            // Armazena o link da imagem no campo original
+            $input.val(json.secure_url).trigger('input');
+
+            $campo.removeClass('attr-invalid');
+
+            $status.text('Foto enviada com sucesso!');
+
+        })
+        .catch(function() {
+
+            limpar();
+
+            mostrarErro(
+                'Não foi possível enviar a foto. Tente novamente.'
+            );
+
+        });
+    }
+
+    // Seleção de arquivo
+    $vazio.on('click', function() {
+        $arquivo[0].click();
+    });
+
+    $zona.find('.foto-upload-trocar').on('click', function() {
+        $arquivo[0].click();
+    });
+
+    $arquivo.on('change', function() {
+        enviar(this.files[0]);
+        $arquivo.val('');
+    });
+
+    // Suporte a arrastar e soltar
+    $zona.on('dragover dragenter', function(e) {
+        e.preventDefault();
+        $zona.addClass('arrastando');
+    });
+
+    $zona.on('dragleave drop', function(e) {
+        e.preventDefault();
+        $zona.removeClass('arrastando');
+    });
+
+    $zona.on('drop', function(e) {
+
+        var arquivos = e.originalEvent.dataTransfer.files;
+
+        if (arquivos && arquivos.length) {
+            enviar(arquivos[0]);
+        }
+
+    });
+
+});
+
+
+/* ==========================================
+   4. INTEGRAÇÃO COM GOOGLE PLANILHAS
+   Registro automático das personalizações
+========================================== */
+
+$(window).on('load', function() {
+
+    // Executa somente na página do carrinho,
+    // sem executar durante o checkout
+    if (
+        !$('body').hasClass('pagina-carrinho') ||
+        $('body').hasClass('carrinho-checkout')
+    ) {
+        return;
+    }
+
+    // Configurações demonstrativas
+    var URL_PLANILHA = 'URL_DO_GOOGLE_APPS_SCRIPT';
+    var TOKEN = 'SEU_TOKEN_DE_EXEMPLO';
+
+    if (URL_PLANILHA.indexOf('http') !== 0) return;
+
+    var dados;
+
+    try {
+        dados = JSON.parse(
+            localStorage.getItem('objectCustom')
+        );
+    } catch(e) {
+        return;
+    }
+
+    if (!dados || !dados.length) return;
+
+    // Recupera os registros já enviados
+    var enviados;
+
+    try {
+        enviados = JSON.parse(
+            localStorage.getItem('objectCustomEnviados')
+        ) || [];
+    } catch(e) {
+        enviados = [];
+    }
+
+    var textoPagina = $('body').text();
+
+    dados.forEach(function(item) {
+
+        if (
+            !item ||
+            !item.sku ||
+            textoPagina.indexOf(item.sku) === -1
+        ) {
+            return;
+        }
+
+        // Identificador para evitar reenvios
+        var chave =
+            item.sku + '|' + JSON.stringify(item.dadosInputs);
+
+        if (enviados.indexOf(chave) !== -1) return;
+
+        var foto = '';
+        var detalhes = [];
+
+        // Organiza os dados de personalização
+        for (var campo in item.dadosInputs) {
+
+            if (campo === 'Foto para gravação') {
+                foto = item.dadosInputs[campo];
+            } else {
+                detalhes.push(
+                    campo + ': ' + item.dadosInputs[campo]
+                );
+            }
+
+        }
+
+        // Envia as informações para o Google Apps Script
+        fetch(URL_PLANILHA, {
+
+            method: 'POST',
+            mode: 'no-cors',
+            keepalive: true,
+
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            },
+
+            body: JSON.stringify({
+
+                token: TOKEN,
+                produto: item.name,
+                sku: item.sku,
+                detalhes: detalhes.join(' | '),
+                foto: foto
+
+            })
+
+        })
+        .then(function() {
+
+            enviados.push(chave);
+
+            localStorage.setItem(
+                'objectCustomEnviados',
+                JSON.stringify(enviados)
+            );
+
+        })
+        .catch(function() {});
+
+    });
+
+});
+</script>
